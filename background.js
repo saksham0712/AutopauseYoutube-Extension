@@ -1,22 +1,21 @@
-// Track whether the message has been sent to avoid repeated sending
-var messageSent = {};
+chrome.tabs.onActivated.addListener(activeInfo => {
+  chrome.tabs.get(activeInfo.tabId, tab => {
+    if (!tab || !tab.url || !tab.url.includes("youtube.com/watch")) return;
+    chrome.tabs.sendMessage(tab.id, { action: "checkPause" });
+  });
+});
 
-chrome.webNavigation.onDOMContentLoaded.addListener(function(details) {
-  if (details.url && details.url.includes("youtube.com") && !messageSent[details.tabId]) {
-    sendMessageToContentScript(details.tabId);
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab && tab.url && tab.url.includes("youtube.com/watch")) {
+    chrome.tabs.sendMessage(tabId, { action: "checkPause" });
   }
 });
 
-function sendMessageToContentScript(tabId) {
-  chrome.tabs.sendMessage(tabId, { command: "togglePlayback" }, function(response) {
-    if (chrome.runtime.lastError) {
-      console.error("Error sending message:", chrome.runtime.lastError.message);
-      // Retry sending the message after a short delay
-      setTimeout(function() {
-        sendMessageToContentScript(tabId);
-      }, 1000); // Adjust the delay as needed
-    } else {
-      messageSent[tabId] = true; // Mark the message as sent
-    }
-  });
-}
+chrome.windows.onFocusChanged.addListener(windowId => {
+  if (windowId === chrome.windows.WINDOW_ID_NONE) {
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }, tabs => {
+      if (!tabs || tabs.length === 0 || !tabs[0].url || !tabs[0].url.includes("youtube.com/watch")) return;
+      chrome.tabs.sendMessage(tabs[0].id, { action: "pauseVideo" });
+    });
+  }
+});
